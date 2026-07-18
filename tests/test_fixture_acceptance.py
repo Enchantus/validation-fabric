@@ -30,6 +30,25 @@ def test_polyglot_example_proves_non_main_default_branch() -> None:
     assert config.default_branch == "trunk"
 
 
+@pytest.mark.parametrize("preset", ["python", "node", "go", "polyglot"])
+def test_language_examples_are_complete_fixture_repositories(preset: str) -> None:
+    root = ROOT / "examples" / preset
+    expected = {
+        "python": ["pyproject.toml", "src/fixture.py", "tests/test_fixture.py"],
+        "node": ["package.json", "package-lock.json", "src/add.js", "test/add.test.js"],
+        "go": ["go.mod", "add.go", "add_test.go"],
+        "polyglot": [
+            "backend/app.py",
+            "backend/tests/test_app.py",
+            "web/package.json",
+            "web/package-lock.json",
+            "edge/go.mod",
+            "edge/add.go",
+        ],
+    }
+    assert all((root / relative).is_file() for relative in expected[preset])
+
+
 def test_docs_only_and_unknown_paths_are_conservative(tmp_path: Path) -> None:
     manifest = tmp_path / ".validation-fabric.yml"
     manifest.write_text(

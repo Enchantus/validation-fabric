@@ -20,7 +20,36 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install build
-      - run: python -m build
+      - name: Build reproducible distributions
+        env:
+          SOURCE_DATE_EPOCH: "315532800"
+        shell: bash
+        run: |
+          one="$RUNNER_TEMP/validation-fabric-dist-one"
+          two="$RUNNER_TEMP/validation-fabric-dist-two"
+          python -m build --outdir "$one"
+          python -m build --outdir "$two"
+          for archive in "$one"/*.tar.gz "$two"/*.tar.gz; do
+            gzip -cd "$archive" > "$archive.tar"
+            gzip -n -9 -c "$archive.tar" > "$archive.normalized"
+            mv "$archive.normalized" "$archive"
+            rm "$archive.tar"
+          done
+          for artifact in "$one"/*; do
+            cmp "$artifact" "$two/$(basename "$artifact")"
+          done
+          mkdir dist
+          cp "$one"/* dist/
+      - name: Smoke-test the clean wheel
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/validation-fabric-smoke"
+          "$RUNNER_TEMP/validation-fabric-smoke/bin/pip" install dist/*.whl
+          "$RUNNER_TEMP/validation-fabric-smoke/bin/vv" --version
+          mkdir "$RUNNER_TEMP/validation-fabric-consumer"
+          cd "$RUNNER_TEMP/validation-fabric-consumer"
+          "$RUNNER_TEMP/validation-fabric-smoke/bin/vv" init --preset python
+          "$RUNNER_TEMP/validation-fabric-smoke/bin/vv" doctor
       - uses: actions/attest-build-provenance@78e6cbd37d0ac1a40113c04f2037dacf1ea3f12e # v4
         with:
           subject-path: dist/*
