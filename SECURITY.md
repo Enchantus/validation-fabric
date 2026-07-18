@@ -4,4 +4,4 @@ Report vulnerabilities through GitHub's private security-advisory interface for 
 
 Supported security fixes target the latest released major version. Prereleases receive fixes on a best-effort basis until `v1.0.0`.
 
-The primary invariant is that pull-request-controlled code never receives an admission signing key, package publishing identity, or merge authority. See [the security model](docs/security-model.md).
+The primary invariant is that pull-request-controlled code never receives an admission signing key, package publishing identity, or merge authority. See [the security model](docs/security-model.md) and [threat model](docs/threat-model.md).

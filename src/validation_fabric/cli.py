@@ -23,27 +23,78 @@ def _write(value: Any) -> None:
 
 
 def _default_manifest(preset: str) -> str:
-    commands = {
-        "python": '["python", "-m", "pytest", "-q"]',
-        "node": '["npm", "test"]',
-        "go": '["go", "test", "./..."]',
-        "polyglot": '["python", "-m", "pytest", "-q"]',
-    }
-    paths = {"python": '["**/*.py"]', "node": '["**/*.js", "**/*.ts"]', "go": '["**/*.go"]', "polyglot": '["**/*"]'}
-    return f"""schemaVersion: 1
+    manifests = {
+        "python": """schemaVersion: 1
 defaultBranch: main
-fallbackDomains: [validation]
+fallbackDomains: [python]
 domains:
-  - id: validation
-    paths: {paths[preset]}
-    inputs: [".validation-fabric.yml"]
-    commands:
-      - {commands[preset]}
+  - id: python
+    paths: ["**/*.py", "pyproject.toml"]
+    inputs: ["pyproject.toml", "src/**", "tests/**"]
+    commands: [["python", "-m", "pip", "install", "-e", ".[test]"], ["python", "-m", "pytest", "-q"]]
     runner: ubuntu-latest
+    toolchain: {python: "3.11"}
 merge:
   enabled: false
   method: squash
-"""
+""",
+        "node": """schemaVersion: 1
+defaultBranch: main
+fallbackDomains: [node]
+domains:
+  - id: node
+    paths: ["**/*.js", "**/*.ts", "package.json", "package-lock.json"]
+    inputs: ["package.json", "package-lock.json", "src/**", "test/**"]
+    commands: [["npm", "ci"], ["npm", "test"]]
+    runner: ubuntu-latest
+    toolchain: {node: "22"}
+merge:
+  enabled: false
+  method: squash
+""",
+        "go": """schemaVersion: 1
+defaultBranch: main
+fallbackDomains: [go]
+domains:
+  - id: go
+    paths: ["**/*.go", "go.mod", "go.sum"]
+    inputs: ["go.mod", "go.sum", "**/*.go"]
+    commands: [["go", "test", "./..."]]
+    runner: ubuntu-latest
+    toolchain: {go: "1.24"}
+merge:
+  enabled: false
+  method: squash
+""",
+        "polyglot": """schemaVersion: 1
+defaultBranch: main
+fallbackDomains: [python, web, go]
+domains:
+  - id: python
+    paths: ["backend/**"]
+    inputs: ["pyproject.toml", "backend/**"]
+    commands: [["python", "-m", "pip", "install", "pytest"], ["python", "-m", "pytest", "-q", "backend/tests"]]
+    runner: ubuntu-latest
+    toolchain: {python: "3.11"}
+  - id: web
+    paths: ["web/**"]
+    inputs: ["web/package.json", "web/package-lock.json", "web/src/**"]
+    commands: [["npm", "--prefix", "web", "ci"], ["npm", "--prefix", "web", "test"]]
+    runner: ubuntu-latest
+    toolchain: {node: "22"}
+  - id: go
+    paths: ["edge/**"]
+    inputs: ["edge/go.mod", "edge/go.sum", "edge/**/*.go"]
+    commands: [["go", "test", "./..."]]
+    cwd: edge
+    runner: ubuntu-latest
+    toolchain: {go: "1.24"}
+merge:
+  enabled: false
+  method: squash
+""",
+    }
+    return manifests[preset]
 
 
 def parser() -> argparse.ArgumentParser:

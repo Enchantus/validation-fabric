@@ -5,7 +5,7 @@ domains:
   - id: python
     paths: ["backend/**"]
     inputs: ["pyproject.toml", "backend/**"]
-    commands: [["python", "-m", "pytest", "-q", "backend/tests"]]
+    commands: [["python", "-m", "pip", "install", "pytest"], ["python", "-m", "pytest", "-q", "backend/tests"]]
     toolchain: {python: "3.11"}
   - id: web
     paths: ["web/**"]

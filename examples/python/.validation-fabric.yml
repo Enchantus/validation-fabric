@@ -5,6 +5,6 @@ domains:
   - id: python
     paths: ["**/*.py", "pyproject.toml"]
     inputs: ["pyproject.toml", "src/**", "tests/**"]
-    commands: [["python", "-m", "pytest", "-q"]]
+    commands: [["python", "-m", "pip", "install", "-e", ".[test]"], ["python", "-m", "pytest", "-q"]]
     toolchain: {python: "3.11"}
 merge: {enabled: false}
