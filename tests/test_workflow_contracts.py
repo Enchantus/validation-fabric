@@ -55,6 +55,7 @@ def test_release_always_attests_github_artifacts_and_gates_pypi() -> None:
     text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
     assert "actions/attest-build-provenance@" in text
     assert "SOURCE_DATE_EPOCH" in text
+    assert 'gzip -n -9 -c "$archive.tar"' in text
     assert 'cmp "$artifact" "dist-rebuild/$(basename "$artifact")"' in text
     assert 'pip" install dist/*.whl' in text
     assert 'vv" init --preset python' in text
@@ -66,6 +67,7 @@ def test_ci_proves_reproducible_artifacts_and_clean_consumer_install() -> None:
     text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
     assert "release-contract:" in text
     assert "SOURCE_DATE_EPOCH" in text
+    assert 'gzip -n -9 -c "$archive.tar"' in text
     assert 'cmp "$artifact" "dist-two/$(basename "$artifact")"' in text
     assert 'pip" install dist-one/*.whl' in text
     assert 'vv" doctor' in text

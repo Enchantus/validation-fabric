@@ -27,6 +27,12 @@ jobs:
         run: |
           python -m build --outdir dist
           python -m build --outdir dist-rebuild
+          for archive in dist/*.tar.gz dist-rebuild/*.tar.gz; do
+            gzip -cd "$archive" > "$archive.tar"
+            gzip -n -9 -c "$archive.tar" > "$archive.normalized"
+            mv "$archive.normalized" "$archive"
+            rm "$archive.tar"
+          done
           for artifact in dist/*; do
             cmp "$artifact" "dist-rebuild/$(basename "$artifact")"
           done

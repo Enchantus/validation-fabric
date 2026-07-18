@@ -2,7 +2,7 @@
 
 Releases use SemVer. Major workflow tags such as `v1` may advance only within their major line; consumers needing immutability may pin a full tag or commit SHA.
 
-A release requires the Python matrix, tests, lint, two byte-identical package builds under the recorded `SOURCE_DATE_EPOCH`, a clean-wheel quick-start smoke test, action validation, fixture adoption, security review, and provenance attestation. PyPI publication uses GitHub OIDC trusted publishing and an environment named `pypi`; no long-lived upload token belongs in repository secrets.
+A release requires the Python matrix, tests, lint, two byte-identical package builds under the recorded `SOURCE_DATE_EPOCH`, canonically compressed source archives, a clean-wheel quick-start smoke test, action validation, fixture adoption, security review, and provenance attestation. PyPI publication uses GitHub OIDC trusted publishing and an environment named `pypi`; no long-lived upload token belongs in repository secrets.
 
 Every tag publishes the attested wheel and source archive to a GitHub Release.
 PyPI publication is fail-closed behind the repository variable

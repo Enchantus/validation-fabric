@@ -73,6 +73,12 @@ jobs:
         run: |
           python -m build --outdir dist-one
           python -m build --outdir dist-two
+          for archive in dist-one/*.tar.gz dist-two/*.tar.gz; do
+            gzip -cd "$archive" > "$archive.tar"
+            gzip -n -9 -c "$archive.tar" > "$archive.normalized"
+            mv "$archive.normalized" "$archive"
+            rm "$archive.tar"
+          done
           for artifact in dist-one/*; do
             cmp "$artifact" "dist-two/$(basename "$artifact")"
           done
