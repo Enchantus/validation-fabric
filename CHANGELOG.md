@@ -4,6 +4,12 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.2.0a3] - 2026-07-18
+
+### Fixed
+
+- Bind supported pull-request source runs to the exact candidate SHA reported by the Actions run API.
+
 ## [0.2.0a2] - 2026-07-18
 
 ### Fixed

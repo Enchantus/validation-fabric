@@ -29,6 +29,8 @@ def test_validation_and_admission_use_the_trusted_base_manifest() -> None:
     assert 'actions/workflows/$workflow_id' in admission
     assert '.name == $workflow and .path == $workflow_path and .state == "active"' in admission
     assert '.name == $workflow and .event' not in admission
+    assert '.head_sha == $head' in admission
+    assert '$source_event == "pull_request_target" and .head_sha == $base' not in admission
     assert "merge-multiple: false" in admission
     assert "! -name '*plan*'" not in admission
 
