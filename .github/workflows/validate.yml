@@ -36,9 +36,11 @@ jobs:
         run: |
           report="$(vv plan --base "${{ inputs.base }}" --head "${{ inputs.head }}")"
           echo "$report" > validation-fabric-plan.json
-          echo "matrix=$(jq -c '{include: [.domains[] | {domain, runner, toolchain: (.toolchain | tojson)}]}' <<<"$report")" >> "$GITHUB_OUTPUT"
-          echo "has-domains=$(jq -r '(.domains | length) > 0' <<<"$report")" >> "$GITHUB_OUTPUT"
-          echo "state=$(jq -r '.state' <<<"$report")" >> "$GITHUB_OUTPUT"
+          {
+            echo "matrix=$(jq -c '{include: [.domains[] | {domain, runner, toolchain: (.toolchain | tojson)}]}' <<<"$report")"
+            echo "has-domains=$(jq -r '(.domains | length) > 0' <<<"$report")"
+            echo "state=$(jq -r '.state' <<<"$report")"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
         with:
           name: validation-fabric-plan
