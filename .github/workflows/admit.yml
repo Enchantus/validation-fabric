@@ -104,7 +104,7 @@ jobs:
           run-id: ${{ inputs.source-run-id }}
           pattern: validation-fabric-*
           path: .validation-fabric/download
-          merge-multiple: true
+          merge-multiple: false
           github-token: ${{ github.token }}
       - name: Recompute the exact plan from trusted workflow code
         shell: bash
@@ -114,11 +114,9 @@ jobs:
           VALIDATION_FABRIC_CERTIFICATE_KEY: ${{ secrets.certificate-key }}
         shell: bash
         run: |
-          mkdir -p .validation-fabric/evidence
-          find .validation-fabric/download -name '*.json' ! -name '*plan*' -exec cp {} .validation-fabric/evidence/ \;
           vv --config "$RUNNER_TEMP/validation-fabric-base.yml" admit \
             --base "${{ inputs.base }}" --head "${{ inputs.head }}" \
-            --evidence-dir .validation-fabric/evidence \
+            --evidence-dir .validation-fabric/download \
             --repository "${{ github.repository }}" \
             --run-id "${{ inputs.source-run-id }}" \
             --pull-request "${{ inputs.pull-request }}" > .validation-fabric/certificate.json

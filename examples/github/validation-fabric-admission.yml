@@ -15,6 +15,7 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request_target'
     runs-on: ubuntu-latest
     outputs:
+      state: ${{ steps.pull.outputs.state }}
       base: ${{ steps.pull.outputs.base }}
       head: ${{ steps.pull.outputs.head }}
       head-repository: ${{ steps.pull.outputs.head-repository }}
@@ -32,6 +33,13 @@ jobs:
         shell: bash
         run: |
           plan="$(cat .validation-fabric/source/validation-fabric-plan.json)"
+          state="$(jq -er '.state' <<<"$plan")"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          if test "$state" = superseded; then
+            echo "The source range was superseded; privileged admission is intentionally skipped." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          test "$state" = planned
           base="$(jq -er '.base' <<<"$plan")"
           head="$(jq -er '.head' <<<"$plan")"
           candidates="$(gh api "repos/${{ github.repository }}/commits/$head/pulls")"
@@ -47,6 +55,7 @@ jobs:
 
   admit:
     needs: resolve
+    if: needs.resolve.outputs.state == 'planned'
     uses: Enchantus/validation-fabric/.github/workflows/admit.yml@v1
     with:
       tooling-ref: v1

@@ -18,6 +18,8 @@ This project follows Semantic Versioning and Keep a Changelog.
 - Require a signed PR-bound certificate and exact successful admission check before optional merging.
 - Remove checkout credentials before candidate commands and pin every external Action to an immutable commit.
 - Reject duplicate, malformed, unexpected, mismatched, missing, and stale evidence.
+- Preserve independently downloaded evidence files so duplicate-domain submissions fail closed.
+- Skip privileged admission for superseded source ranges without reporting a candidate failure.
 
 ## [0.1.0a1] - 2026-07-18
 

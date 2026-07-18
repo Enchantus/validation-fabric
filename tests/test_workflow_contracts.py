@@ -26,6 +26,8 @@ def test_validation_and_admission_use_the_trusted_base_manifest() -> None:
     assert "source-run-title:" in admission
     assert 'default: pull_request_target' in admission
     assert '.display_title == $run_title' in admission
+    assert "merge-multiple: false" in admission
+    assert "! -name '*plan*'" not in admission
 
 
 def test_merge_requires_certificate_and_admission_run() -> None:
@@ -69,3 +71,9 @@ def test_recommended_caller_is_default_branch_owned_and_read_only() -> None:
     assert "run-name: Validation Fabric PR #" in source
     assert "contents: read" in source
     assert "head-repository: ${{ github.event.pull_request.head.repo.full_name }}" in source
+
+
+def test_admission_caller_skips_superseded_ranges() -> None:
+    source = (ACTION.parent / "examples" / "github" / "validation-fabric-admission.yml").read_text(encoding="utf-8")
+    assert "state: ${{ steps.pull.outputs.state }}" in source
+    assert "if: needs.resolve.outputs.state == 'planned'" in source

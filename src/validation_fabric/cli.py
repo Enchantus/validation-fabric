@@ -184,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command in {"plan", "status"}:
             _write(plan_dict)
             return 0
-        if plan.state == "superseded":
+        if plan.state == "superseded" and args.command != "admit":
             _write(plan_dict)
             return 0
         if args.command == "run":
@@ -212,7 +212,9 @@ def main(argv: list[str] | None = None) -> int:
                 failed |= code != 0
             return 1 if failed else 0
         evidence_items = [
-            json.loads(path.read_text(encoding="utf-8")) for path in sorted(Path(args.evidence_dir).glob("*.json"))
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(Path(args.evidence_dir).rglob("*.json"))
+            if path.name != "validation-fabric-plan.json"
         ]
         key = os.environ.get(args.key_env, "")
         envelope = admit(plan_dict, evidence_items, args.repository, args.run_id, key, args.pull_request)
