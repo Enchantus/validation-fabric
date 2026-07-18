@@ -94,8 +94,7 @@ jobs:
             --arg base "${{ inputs.base }}" --arg head "${{ inputs.head }}" '
             .event == $source_event and .conclusion == "success" and
             .display_title == $run_title and .path == $workflow_path and .repository.full_name == $repo and
-            (($source_event == "pull_request_target" and .head_sha == $base) or
-             ($source_event == "pull_request" and .head_sha == $head))
+            .head_sha == $head
           ' .validation-fabric/source-run.json
           gh api "repos/${{ github.repository }}/pulls/${{ inputs.pull-request }}" > .validation-fabric/pull.json
           jq -e --arg base "${{ inputs.base }}" --arg head "${{ inputs.head }}" \
