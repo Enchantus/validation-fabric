@@ -12,9 +12,21 @@ class Api:
             "mergeable_state": "clean",
         }
         self.posts = []
+        self.checks = [
+            {
+                "name": "Validation Fabric / admission",
+                "head_sha": "head",
+                "status": "completed",
+                "conclusion": "success",
+            }
+        ]
 
     def get(self, path):
-        return {"object": {"sha": "base"}} if path.startswith("git/ref") else self.pull
+        if path.startswith("git/ref"):
+            return {"object": {"sha": "base"}}
+        if path.startswith("commits/"):
+            return {"check_runs": self.checks}
+        return self.pull
 
     def put(self, path, payload):
         return {"merged": True, "sha": "merge"}
@@ -47,3 +59,15 @@ def test_exact_head_merges_and_dispatches_configured_workflows():
     result = decide_merge(api, config(True), 1, "head")
     assert result["action"] == "merged"
     assert api.posts == [("actions/workflows/ci.yml/dispatches", {"ref": "trunk"})]
+
+
+def test_merge_rejects_without_exact_successful_admission_check():
+    api = Api()
+    api.checks = []
+    result = decide_merge(api, config(True), 1, "head")
+    assert result == {"action": "reject", "reason": "admission-check-missing", "pullRequest": 1}
+
+
+def test_merge_supersedes_certificate_for_an_old_base():
+    result = decide_merge(Api(), config(True), 1, "head", "old-base")
+    assert result == {"action": "superseded", "reason": "certificate-base-mismatch", "pullRequest": 1}

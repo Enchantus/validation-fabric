@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .certificates import Evidence, admit
+from .certificates import Evidence, admit, authorize_merge_certificate
 from .config import ConfigError, load_config
 from .core import FabricError, build_plan, run_domain
 from .github import HttpGitHubApi
@@ -62,6 +62,7 @@ def parser() -> argparse.ArgumentParser:
             command.add_argument("--evidence-dir", required=True)
             command.add_argument("--repository", required=True)
             command.add_argument("--run-id", required=True, type=int)
+            command.add_argument("--pull-request", required=True, type=int)
             command.add_argument("--key-env", default="VALIDATION_FABRIC_CERTIFICATE_KEY")
     explain = sub.add_parser("explain")
     explain.add_argument("domain")
@@ -69,6 +70,8 @@ def parser() -> argparse.ArgumentParser:
     merge.add_argument("--repository", required=True)
     merge.add_argument("--pull-request", required=True, type=int)
     merge.add_argument("--admitted-head", required=True)
+    merge.add_argument("--certificate", required=True)
+    merge.add_argument("--key-env", default="VALIDATION_FABRIC_CERTIFICATE_KEY")
     merge.add_argument("--token-env", default="GITHUB_TOKEN")
     return result
 
@@ -118,11 +121,22 @@ def main(argv: list[str] | None = None) -> int:
             token = os.environ.get(args.token_env, "")
             if not token:
                 raise ValueError(f"token environment variable is empty: {args.token_env}")
+            key = os.environ.get(args.key_env, "")
+            if not key:
+                raise ValueError(f"key environment variable is empty: {args.key_env}")
+            envelope = json.loads(Path(args.certificate).read_text(encoding="utf-8"))
+            authorization = authorize_merge_certificate(
+                envelope, key, args.repository, args.admitted_head, args.pull_request
+            )
+            if not authorization["authorized"]:
+                _write({"action": "reject", **authorization})
+                return 1
             result = decide_merge(
                 HttpGitHubApi(args.repository, token),
                 config,
                 args.pull_request,
                 args.admitted_head,
+                authorization["base"],
             )
             _write(result)
             return result_exit_code(result)
@@ -162,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
             json.loads(path.read_text(encoding="utf-8")) for path in sorted(Path(args.evidence_dir).glob("*.json"))
         ]
         key = os.environ.get(args.key_env, "")
-        envelope = admit(plan_dict, evidence_items, args.repository, args.run_id, key)
+        envelope = admit(plan_dict, evidence_items, args.repository, args.run_id, key, args.pull_request)
         _write(envelope)
         return 0 if envelope["certificate"]["admitted"] else 1
     except (ConfigError, FabricError, ValueError, OSError, json.JSONDecodeError) as error:

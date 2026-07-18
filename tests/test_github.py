@@ -11,7 +11,18 @@ class Api:
 
 
 def identity():
-    return RunIdentity("o/r", 7, "Validation Fabric", "pull_request", "success", "base", "head", 12)
+    return RunIdentity(
+        "o/r",
+        7,
+        "Validation Fabric",
+        "pull_request",
+        "success",
+        "base",
+        "head",
+        12,
+        ".github/workflows/validation-fabric.yml",
+        "fork/r",
+    )
 
 
 def test_privileged_plane_rechecks_every_identity_field():
@@ -20,9 +31,14 @@ def test_privileged_plane_rechecks_every_identity_field():
         "event": "pull_request",
         "conclusion": "success",
         "head_sha": "head",
-        "pull_requests": [{"number": 12}],
+        "path": ".github/workflows/validation-fabric.yml",
+        "repository": {"full_name": "o/r"},
+        "head_repository": {"full_name": "fork/r"},
     }
-    pull = {"base": {"sha": "base"}, "head": {"sha": "head"}}
+    pull = {
+        "base": {"sha": "base", "repo": {"full_name": "o/r"}},
+        "head": {"sha": "head", "repo": {"full_name": "fork/r"}},
+    }
     assert verify_run_identity(Api(run, pull), identity())["verified"] is True
     run["head_sha"] = "attacker"
     result = verify_run_identity(Api(run, pull), identity())
@@ -36,7 +52,12 @@ def test_moved_pr_head_is_rejected():
         "event": "pull_request",
         "conclusion": "success",
         "head_sha": "head",
-        "pull_requests": [{"number": 12}],
+        "path": ".github/workflows/validation-fabric.yml",
+        "repository": {"full_name": "o/r"},
+        "head_repository": {"full_name": "fork/r"},
     }
-    pull = {"base": {"sha": "base"}, "head": {"sha": "new"}}
+    pull = {
+        "base": {"sha": "base", "repo": {"full_name": "o/r"}},
+        "head": {"sha": "new", "repo": {"full_name": "fork/r"}},
+    }
     assert "current-head-mismatch" in verify_run_identity(Api(run, pull), identity())["failures"]
