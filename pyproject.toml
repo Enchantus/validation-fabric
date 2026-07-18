@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "validation-fabric"
+version = "0.1.0a1"
+description = "Risk-aware validation and exact-candidate admission for modern repositories"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Enchantus" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+dependencies = ["PyYAML>=6.0.2"]
+
+[project.scripts]
+vv = "validation_fabric.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Enchantus/validation-fabric"
+Issues = "https://github.com/Enchantus/validation-fabric/issues"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-cov>=6", "ruff>=0.12", "mypy>=1.17", "build>=1.2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/validation_fabric"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
