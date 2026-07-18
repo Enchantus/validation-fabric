@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "validation-fabric"
-version = "0.2.0a1"
+version = "0.2.0a2"
 description = "Risk-aware validation and exact-candidate admission for modern repositories"
 readme = "README.md"
 requires-python = ">=3.11"

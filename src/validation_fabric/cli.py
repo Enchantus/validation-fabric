@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .certificates import Evidence, admit, authorize_merge_certificate
 from .config import ConfigError, load_config
 from .core import FabricError, build_plan, run_domain
@@ -47,6 +48,7 @@ merge:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="vv", description="Risk-aware exact-candidate validation")
+    result.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     result.add_argument("--repo-root", default=".")
     result.add_argument("--config", default=".validation-fabric.yml")
     sub = result.add_subparsers(dest="command", required=True)
