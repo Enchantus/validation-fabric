@@ -26,8 +26,9 @@ Commit `.validation-fabric.yml` and the thin callers from [`examples/github`](ex
 - PR jobs publish unsigned evidence; they do not possess trust keys.
 - Default-branch code recomputes the plan and binds evidence to the originating run before signing admission.
 - Stale exact SHA pairs are neutral supersessions, while malformed configuration and invalid evidence fail closed.
+- Atomic lifecycle events reject conflicting duplicate IDs and reduce to deterministic candidate status.
 
-Read the [configuration reference](docs/configuration.md), [security model](docs/security-model.md), and [migration guide](docs/migration.md).
+Read the [configuration reference](docs/configuration.md), [security model](docs/security-model.md), [event ledger](docs/events.md), and [migration guide](docs/migration.md).
 
 ## Provenance
 

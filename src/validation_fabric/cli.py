@@ -12,6 +12,7 @@ from typing import Any
 from .certificates import Evidence, admit, authorize_merge_certificate
 from .config import ConfigError, load_config
 from .core import FabricError, build_plan, run_domain
+from .events import Event, EventError, append_event, reduce_status
 from .github import HttpGitHubApi
 from .merge import decide_merge, result_exit_code
 
@@ -64,6 +65,19 @@ def parser() -> argparse.ArgumentParser:
             command.add_argument("--run-id", required=True, type=int)
             command.add_argument("--pull-request", required=True, type=int)
             command.add_argument("--key-env", default="VALIDATION_FABRIC_CERTIFICATE_KEY")
+        if name == "status":
+            command.add_argument("--event-dir")
+            command.add_argument("--candidate")
+    event = sub.add_parser("event")
+    event.add_argument("kind")
+    event.add_argument("--event-id", required=True)
+    event.add_argument("--candidate", required=True)
+    event.add_argument("--occurred-at", required=True)
+    event.add_argument("--domain", default="")
+    event.add_argument("--repository", default="local")
+    event.add_argument("--run-id", type=int, default=0)
+    event.add_argument("--metadata-json", default="{}")
+    event.add_argument("--event-dir", default=".validation-fabric/events")
     explain = sub.add_parser("explain")
     explain.add_argument("domain")
     merge = sub.add_parser("merge")
@@ -86,6 +100,31 @@ def main(argv: list[str] | None = None) -> int:
                 raise ConfigError(f"configuration already exists: {manifest}")
             manifest.write_text(_default_manifest(args.preset), encoding="utf-8")
             _write({"schemaVersion": 1, "created": str(manifest), "preset": args.preset})
+            return 0
+        if args.command == "event":
+            metadata = json.loads(args.metadata_json)
+            if not isinstance(metadata, dict):
+                raise ValueError("metadata-json must contain an object")
+            result = append_event(
+                root / args.event_dir,
+                Event(
+                    1,
+                    args.event_id,
+                    args.kind,
+                    args.candidate,
+                    args.occurred_at,
+                    args.repository,
+                    args.run_id,
+                    args.domain,
+                    metadata,
+                ),
+            )
+            _write(result)
+            return 0
+        if args.command == "status" and args.event_dir:
+            if not args.candidate:
+                raise ValueError("status --event-dir requires --candidate")
+            _write(reduce_status(root / args.event_dir, args.candidate))
             return 0
         config = load_config(manifest)
         if args.command == "doctor":
@@ -179,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         envelope = admit(plan_dict, evidence_items, args.repository, args.run_id, key, args.pull_request)
         _write(envelope)
         return 0 if envelope["certificate"]["admitted"] else 1
-    except (ConfigError, FabricError, ValueError, OSError, json.JSONDecodeError) as error:
+    except (ConfigError, EventError, FabricError, ValueError, OSError, json.JSONDecodeError) as error:
         _write({"schemaVersion": 1, "ok": False, "error": str(error)})
         return 2
 
