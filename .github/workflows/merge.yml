@@ -3,6 +3,10 @@ name: Validation Fabric reusable exact-candidate merge
 on:
   workflow_call:
     inputs:
+      tooling-ref:
+        description: Immutable validation-fabric tag or commit SHA.
+        required: true
+        type: string
       pull-request:
         required: true
         type: string
@@ -23,7 +27,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.admitted-head }}
-      - uses: Enchantus/validation-fabric@v1
+      - uses: actions/checkout@v7
+        with:
+          repository: Enchantus/validation-fabric
+          ref: ${{ inputs.tooling-ref }}
+          path: .validation-fabric-tooling
+      - uses: ./.validation-fabric-tooling
       - name: Apply the consumer's opt-in merge policy
         env:
           GITHUB_TOKEN: ${{ github.token }}

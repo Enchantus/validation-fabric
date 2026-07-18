@@ -3,6 +3,10 @@ name: Validation Fabric reusable privileged admission
 on:
   workflow_call:
     inputs:
+      tooling-ref:
+        description: Immutable validation-fabric tag or commit SHA.
+        required: true
+        type: string
       source-run-id:
         required: true
         type: string
@@ -40,7 +44,12 @@ jobs:
           fetch-depth: 0
       - shell: bash
         run: git fetch --no-tags origin "${{ inputs.base }}" "${{ inputs.head }}"
-      - uses: Enchantus/validation-fabric@v1
+      - uses: actions/checkout@v7
+        with:
+          repository: Enchantus/validation-fabric
+          ref: ${{ inputs.tooling-ref }}
+          path: .validation-fabric-tooling
+      - uses: ./.validation-fabric-tooling
       - name: Re-read and verify the originating run and current pull request
         env:
           GH_TOKEN: ${{ github.token }}

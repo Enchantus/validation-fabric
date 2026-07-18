@@ -2,6 +2,10 @@
 
 Adopt in shadow mode first:
 
+Pin both the reusable workflow reference and its required `tooling-ref` input to
+the same immutable tag or commit. During prerelease evaluation, use an exact
+commit SHA so the workflow and installed CLI cannot drift.
+
 1. Commit a manifest that represents existing validation ownership.
 2. Run legacy CI and Validation Fabric for identical base/head pairs.
 3. Compare changed paths, selected domains, unknown paths, fingerprints, command outcomes, and admissions.
