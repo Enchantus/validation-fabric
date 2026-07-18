@@ -4,6 +4,13 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.2.0a2] - 2026-07-18
+
+### Fixed
+
+- Verify configured workflow identity through the source run's `workflow_id` when callers use a dynamic `run-name`.
+- Report the installed package version through `vv --version` and keep the package version constant synchronized.
+
 ## [0.2.0a1] - 2026-07-18
 
 ### Added
