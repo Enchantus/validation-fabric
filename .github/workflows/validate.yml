@@ -13,6 +13,11 @@ on:
       head:
         required: true
         type: string
+      head-repository:
+        description: Repository containing the candidate head, including forks.
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -25,32 +30,39 @@ jobs:
       has-domains: ${{ steps.plan.outputs.has-domains }}
       state: ${{ steps.plan.outputs.state }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
+          repository: ${{ inputs.head-repository || github.repository }}
           ref: ${{ inputs.head }}
           fetch-depth: 0
       - name: Fetch the exact comparison commits when available
         shell: bash
         run: |
-          git fetch --no-tags origin "${{ inputs.base }}" || true
+          git remote add validation-fabric-base "https://github.com/${{ github.repository }}.git"
+          git fetch --no-tags validation-fabric-base "${{ inputs.base }}"
           git fetch --no-tags origin "${{ inputs.head }}" || true
-      - uses: actions/checkout@v7
+          git config --local --unset-all http.https://github.com/.extraheader || true
+      - name: Load the consumer manifest from the trusted base
+        shell: bash
+        run: git show "${{ inputs.base }}:.validation-fabric.yml" > "$RUNNER_TEMP/validation-fabric-base.yml"
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: Enchantus/validation-fabric
           ref: ${{ inputs.tooling-ref }}
           path: .validation-fabric-tooling
+          persist-credentials: false
       - uses: ./.validation-fabric-tooling
       - id: plan
         shell: bash
         run: |
-          report="$(vv plan --base "${{ inputs.base }}" --head "${{ inputs.head }}")"
+          report="$(vv --config "$RUNNER_TEMP/validation-fabric-base.yml" plan --base "${{ inputs.base }}" --head "${{ inputs.head }}")"
           echo "$report" > validation-fabric-plan.json
           {
             echo "matrix=$(jq -c '{include: [.domains[] | {domain, runner, toolchain: (.toolchain | tojson)}]}' <<<"$report")"
             echo "has-domains=$(jq -r '(.domains | length) > 0' <<<"$report")"
             echo "state=$(jq -r '.state' <<<"$report")"
           } >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: validation-fabric-plan
           path: validation-fabric-plan.json
@@ -64,18 +76,27 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
+          repository: ${{ inputs.head-repository || github.repository }}
           ref: ${{ inputs.head }}
           fetch-depth: 0
       - name: Fetch the exact comparison commits
         shell: bash
-        run: git fetch --no-tags origin "${{ inputs.base }}" "${{ inputs.head }}"
-      - uses: actions/checkout@v7
+        run: |
+          git remote add validation-fabric-base "https://github.com/${{ github.repository }}.git"
+          git fetch --no-tags validation-fabric-base "${{ inputs.base }}"
+          git fetch --no-tags origin "${{ inputs.head }}"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+      - name: Load the consumer manifest from the trusted base
+        shell: bash
+        run: git show "${{ inputs.base }}:.validation-fabric.yml" > "$RUNNER_TEMP/validation-fabric-base.yml"
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: Enchantus/validation-fabric
           ref: ${{ inputs.tooling-ref }}
           path: .validation-fabric-tooling
+          persist-credentials: false
       - uses: ./.validation-fabric-tooling
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -83,8 +104,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p .validation-fabric/evidence
-          vv run --base "${{ inputs.base }}" --head "${{ inputs.head }}" --domain "${{ matrix.domain }}" > ".validation-fabric/evidence/${{ matrix.domain }}.json"
-      - uses: actions/upload-artifact@v7
+          vv --config "$RUNNER_TEMP/validation-fabric-base.yml" run \
+            --base "${{ inputs.base }}" --head "${{ inputs.head }}" \
+            --domain "${{ matrix.domain }}" > ".validation-fabric/evidence/${{ matrix.domain }}.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: validation-fabric-evidence-${{ matrix.domain }}

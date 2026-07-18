@@ -17,3 +17,38 @@ def test_doctor_reports_errors_without_exiting(tmp_path: Path, capsys):
     assert main(["--repo-root", str(tmp_path), "doctor"]) == 2
     report = json.loads(capsys.readouterr().out)
     assert report["ok"] is False
+
+
+def test_event_and_status_emit_versioned_json_without_a_manifest(tmp_path: Path, capsys) -> None:
+    common = ["--repo-root", str(tmp_path)]
+    assert (
+        main(
+            [
+                *common,
+                "event",
+                "candidate.created",
+                "--event-id",
+                "run-1-created",
+                "--candidate",
+                "head",
+                "--occurred-at",
+                "2026-01-01T00:00:00Z",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["state"] == "appended"
+    assert (
+        main(
+            [
+                *common,
+                "status",
+                "--event-dir",
+                ".validation-fabric/events",
+                "--candidate",
+                "head",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["state"] == "created"

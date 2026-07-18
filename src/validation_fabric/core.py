@@ -80,7 +80,7 @@ def select_domains(changed: list[str], config: FabricConfig) -> tuple[list[str],
 
 def git_changed_paths(root: Path, base: str, head: str) -> list[str]:
     completed = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=ACMRTUXB", f"{base}...{head}"],
+        ["git", "diff", "--name-only", "--diff-filter=ACDMRTUXB", f"{base}...{head}"],
         cwd=root,
         capture_output=True,
         text=True,

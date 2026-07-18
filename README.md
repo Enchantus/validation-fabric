@@ -4,7 +4,7 @@ Validation Fabric selects validation by changed-path risk, fingerprints the exac
 
 It ships as the `validation-fabric` Python package, the `vv` CLI, a GitHub Action, and reusable GitHub workflows. Exact-candidate merging is available but disabled by default.
 
-> Status: `0.1.0a1` bootstrap. The API is intentionally prerelease until fixture adoption and SessionBuddie shadow parity are complete.
+> Status: `0.2.0a1` prerelease. The API remains prerelease until privileged adoption, sustained shadow parity, and the v1 promotion audit are complete.
 
 ## Quick start
 
@@ -26,8 +26,9 @@ Commit `.validation-fabric.yml` and the thin callers from [`examples/github`](ex
 - PR jobs publish unsigned evidence; they do not possess trust keys.
 - Default-branch code recomputes the plan and binds evidence to the originating run before signing admission.
 - Stale exact SHA pairs are neutral supersessions, while malformed configuration and invalid evidence fail closed.
+- Atomic lifecycle events reject conflicting duplicate IDs and reduce to deterministic candidate status.
 
-Read the [configuration reference](docs/configuration.md), [security model](docs/security-model.md), and [migration guide](docs/migration.md).
+Read the [configuration reference](docs/configuration.md), [security model](docs/security-model.md), [event ledger](docs/events.md), and [migration guide](docs/migration.md).
 
 ## Provenance
 

@@ -49,38 +49,3 @@ class HttpGitHubApi:
 
     def post(self, path: str, payload: dict[str, Any]) -> Any:
         return self.request("POST", path, payload)
-
-
-@dataclass(frozen=True)
-class RunIdentity:
-    repository: str
-    run_id: int
-    workflow_name: str
-    event: str
-    conclusion: str
-    base: str
-    head: str
-    pull_request: int
-
-
-def verify_run_identity(api: GitHubApi, expected: RunIdentity) -> dict[str, Any]:
-    """Re-read an untrusted run through the privileged API plane."""
-    run = api.get(f"actions/runs/{expected.run_id}")
-    failures: list[str] = []
-    if run.get("name") != expected.workflow_name:
-        failures.append("workflow-name-mismatch")
-    if run.get("event") != expected.event:
-        failures.append("event-mismatch")
-    if run.get("conclusion") != expected.conclusion:
-        failures.append("conclusion-mismatch")
-    if run.get("head_sha") != expected.head:
-        failures.append("head-mismatch")
-    pulls = run.get("pull_requests") or []
-    if len(pulls) != 1 or int(pulls[0].get("number", 0)) != expected.pull_request:
-        failures.append("pull-request-mismatch")
-    pull = api.get(f"pulls/{expected.pull_request}")
-    if pull.get("base", {}).get("sha") != expected.base:
-        failures.append("base-mismatch")
-    if pull.get("head", {}).get("sha") != expected.head:
-        failures.append("current-head-mismatch")
-    return {"verified": not failures, "failures": failures, "run": run, "pull": pull}

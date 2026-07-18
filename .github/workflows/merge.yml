@@ -13,8 +13,15 @@ on:
       admitted-head:
         required: true
         type: string
+      admission-run-id:
+        required: true
+        type: string
+    secrets:
+      certificate-key:
+        required: true
 
 permissions:
+  checks: read
   actions: write
   contents: write
   pull-requests: write
@@ -24,20 +31,42 @@ jobs:
     name: Validation Fabric / exact-candidate merge
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          ref: ${{ inputs.admitted-head }}
-      - uses: actions/checkout@v7
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           repository: Enchantus/validation-fabric
           ref: ${{ inputs.tooling-ref }}
           path: .validation-fabric-tooling
+          persist-credentials: false
       - uses: ./.validation-fabric-tooling
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          run-id: ${{ inputs.admission-run-id }}
+          pattern: validation-fabric-admission-${{ inputs.admitted-head }}
+          path: .validation-fabric/admission
+          github-token: ${{ github.token }}
+      - name: Load the consumer manifest named by the signed certificate
+        shell: bash
+        run: |
+          certificate="$(find .validation-fabric/admission -name '*.json' -type f -print -quit)"
+          test -n "$certificate"
+          base="$(jq -er '.certificate.base' "$certificate")"
+          git fetch --no-tags origin "$base"
+          git show "$base:.validation-fabric.yml" > "$RUNNER_TEMP/validation-fabric-base.yml"
+          git config --local --unset-all http.https://github.com/.extraheader || true
       - name: Apply the consumer's opt-in merge policy
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          VALIDATION_FABRIC_CERTIFICATE_KEY: ${{ secrets.certificate-key }}
         shell: bash
         run: |
-          vv merge --repository "${{ github.repository }}" \
+          certificate="$(find .validation-fabric/admission -name '*.json' -type f -print -quit)"
+          test -n "$certificate"
+          vv --config "$RUNNER_TEMP/validation-fabric-base.yml" merge \
+            --repository "${{ github.repository }}" \
             --pull-request "${{ inputs.pull-request }}" \
-            --admitted-head "${{ inputs.admitted-head }}"
+            --admitted-head "${{ inputs.admitted-head }}" \
+            --certificate "$certificate"
