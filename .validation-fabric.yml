@@ -1,0 +1,25 @@
+schemaVersion: 1
+defaultBranch: main
+fallbackDomains: [package, workflows, docs]
+domains:
+  - id: package
+    paths: ["src/**", "tests/**", "pyproject.toml"]
+    inputs: ["src/**", "tests/**", "pyproject.toml"]
+    commands:
+      - ["python", "-m", "pytest", "-q"]
+      - ["python", "-m", "ruff", "check", "."]
+    toolchain: {python: "3.11"}
+  - id: workflows
+    paths: [".github/**", "action.yml"]
+    inputs: [".github/**", "action.yml"]
+    commands:
+      - ["actionlint"]
+    requires: [package]
+  - id: docs
+    paths: ["docs/**", "examples/**", "README.md", "CONTRIBUTING.md", "SECURITY.md", "LICENSE", "NOTICE"]
+    inputs: ["docs/**", "examples/**"]
+    commands:
+      - ["python", "-c", "from pathlib import Path; assert all(p.read_text(encoding='utf-8').strip() for p in Path('docs').glob('*.md'))"]
+merge:
+  enabled: false
+  method: squash

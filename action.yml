@@ -1,0 +1,25 @@
+name: Set up Validation Fabric
+description: Install the pinned Validation Fabric CLI and optional consumer toolchains.
+inputs:
+  python-version:
+    description: Python version used to run Validation Fabric.
+    default: "3.11"
+  toolchain:
+    description: JSON toolchain object from the selected domain.
+    default: "{}"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+    - shell: bash
+      run: python -m pip install --disable-pip-version-check "${GITHUB_ACTION_PATH}"
+    - uses: actions/setup-node@v6
+      if: ${{ fromJSON(inputs.toolchain).node != null }}
+      with:
+        node-version: ${{ fromJSON(inputs.toolchain).node }}
+    - uses: actions/setup-go@v6
+      if: ${{ fromJSON(inputs.toolchain).go != null }}
+      with:
+        go-version: ${{ fromJSON(inputs.toolchain).go }}

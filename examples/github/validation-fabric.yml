@@ -1,0 +1,15 @@
+name: Validation Fabric
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: Enchantus/validation-fabric/.github/workflows/validate.yml@v1
+    with:
+      base: ${{ github.event.pull_request.base.sha }}
+      head: ${{ github.event.pull_request.head.sha }}

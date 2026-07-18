@@ -1,0 +1,34 @@
+name: Validation Fabric reusable exact-candidate merge
+
+on:
+  workflow_call:
+    inputs:
+      pull-request:
+        required: true
+        type: string
+      admitted-head:
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    name: Validation Fabric / exact-candidate merge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.admitted-head }}
+      - uses: Enchantus/validation-fabric@v1
+      - name: Apply the consumer's opt-in merge policy
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          vv merge --repository "${{ github.repository }}" \
+            --pull-request "${{ inputs.pull-request }}" \
+            --admitted-head "${{ inputs.admitted-head }}"

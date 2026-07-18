@@ -1,0 +1,89 @@
+name: Validation Fabric reusable validation
+
+on:
+  workflow_call:
+    inputs:
+      base:
+        required: true
+        type: string
+      head:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has-domains: ${{ steps.plan.outputs.has-domains }}
+      state: ${{ steps.plan.outputs.state }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head }}
+          fetch-depth: 0
+      - name: Fetch the exact comparison commits when available
+        shell: bash
+        run: |
+          git fetch --no-tags origin "${{ inputs.base }}" || true
+          git fetch --no-tags origin "${{ inputs.head }}" || true
+      - uses: Enchantus/validation-fabric@v1
+      - id: plan
+        shell: bash
+        run: |
+          report="$(vv plan --base "${{ inputs.base }}" --head "${{ inputs.head }}")"
+          echo "$report" > validation-fabric-plan.json
+          echo "matrix=$(jq -c '{include: [.domains[] | {domain, runner, toolchain: (.toolchain | tojson)}]}' <<<"$report")" >> "$GITHUB_OUTPUT"
+          echo "has-domains=$(jq -r '(.domains | length) > 0' <<<"$report")" >> "$GITHUB_OUTPUT"
+          echo "state=$(jq -r '.state' <<<"$report")" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: validation-fabric-plan
+          path: validation-fabric-plan.json
+          retention-days: 14
+
+  domains:
+    needs: plan
+    if: needs.plan.outputs.has-domains == 'true' && needs.plan.outputs.state == 'planned'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head }}
+          fetch-depth: 0
+      - name: Fetch the exact comparison commits
+        shell: bash
+        run: git fetch --no-tags origin "${{ inputs.base }}" "${{ inputs.head }}"
+      - uses: Enchantus/validation-fabric@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - name: Run selected domain without privileged credentials
+        shell: bash
+        run: |
+          mkdir -p .validation-fabric/evidence
+          vv run --base "${{ inputs.base }}" --head "${{ inputs.head }}" --domain "${{ matrix.domain }}" > ".validation-fabric/evidence/${{ matrix.domain }}.json"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: validation-fabric-evidence-${{ matrix.domain }}
+          path: .validation-fabric/evidence/*.json
+          retention-days: 14
+
+  result:
+    name: Validation Fabric / unprivileged result
+    needs: [plan, domains]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a successful plan and every selected domain
+        shell: bash
+        run: |
+          test "${{ needs.plan.result }}" = success
+          test "${{ needs.plan.outputs.state }}" = superseded && exit 0
+          test "${{ needs.domains.result }}" = success || test "${{ needs.domains.result }}" = skipped

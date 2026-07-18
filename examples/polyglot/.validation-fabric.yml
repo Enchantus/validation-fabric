@@ -1,0 +1,21 @@
+schemaVersion: 1
+defaultBranch: trunk
+fallbackDomains: [python, web, go]
+domains:
+  - id: python
+    paths: ["backend/**"]
+    inputs: ["pyproject.toml", "backend/**"]
+    commands: [["python", "-m", "pytest", "-q", "backend/tests"]]
+    toolchain: {python: "3.11"}
+  - id: web
+    paths: ["web/**"]
+    inputs: ["web/package.json", "web/package-lock.json", "web/src/**"]
+    commands: [["npm", "--prefix", "web", "ci"], ["npm", "--prefix", "web", "test"]]
+    toolchain: {node: "22"}
+  - id: go
+    paths: ["edge/**"]
+    inputs: ["edge/go.mod", "edge/go.sum", "edge/**/*.go"]
+    commands: [["go", "test", "./..."]]
+    cwd: edge
+    toolchain: {go: "1.24"}
+merge: {enabled: false}

@@ -1,101 +1,152 @@
-"""Configuration parsing and validation for .validation-fabric.yml."""
+"""Consumer configuration for Validation Fabric."""
 
 from __future__ import annotations
 
-import json
-import hashlib
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 
-@dataclass
+class ConfigError(ValueError):
+    """Raised when a consumer manifest violates the public schema."""
+
+
+@dataclass(frozen=True)
 class Domain:
-    """A domain with required validations."""
-    name: str
-    description: str = ""
-    required_checks: list[str] = field(default_factory=list)
+    id: str
+    paths: tuple[str, ...]
+    inputs: tuple[str, ...]
+    commands: tuple[tuple[str, ...], ...]
+    requires: tuple[str, ...] = ()
+    cwd: str = "."
+    runner: str = "ubuntu-latest"
+    toolchain: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+
+@dataclass(frozen=True)
+class MergeConfig:
+    enabled: bool = False
+    method: str = "squash"
+    admission_check: str = "Validation Fabric / admission"
+    post_merge_workflows: tuple[str, ...] = ()
 
 
-@dataclass
-class Config:
-    """Validation Fabric configuration."""
-    version: str
-    domains: dict[str, Domain] = field(default_factory=dict)
-    transitive_requirements: dict[str, list[str]] = field(default_factory=dict)
+@dataclass(frozen=True)
+class FabricConfig:
+    schema_version: int
+    default_branch: str
+    fallback_domains: tuple[str, ...]
+    domains: dict[str, Domain]
+    merge: MergeConfig = MergeConfig()
 
-    @classmethod
-    def from_yaml(cls, yaml_path: Path | str) -> Config:
-        """Parse configuration from a YAML file."""
-        yaml_path = Path(yaml_path)
-        if not yaml_path.exists():
-            raise FileNotFoundError(f"Configuration file not found: {yaml_path}")
 
-        with open(yaml_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+def _strings(value: Any, field_name: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
+        raise ConfigError(f"{field_name} must be a list of non-empty strings")
+    return tuple(value)
 
-        version = data.get("version", "1.0")
-        if not isinstance(version, str):
-            raise ValueError(f"Invalid version format: {version}")
 
-        domains_data = data.get("domains", {})
-        if not isinstance(domains_data, dict):
-            raise ValueError("domains must be a dictionary")
+def _commands(value: Any, field_name: str) -> tuple[tuple[str, ...], ...]:
+    if not isinstance(value, list) or not value:
+        raise ConfigError(f"{field_name} must contain at least one argv list")
+    commands: list[tuple[str, ...]] = []
+    for command in value:
+        if not isinstance(command, list) or not command or not all(isinstance(arg, str) and arg for arg in command):
+            raise ConfigError(f"{field_name} commands must be non-empty argv lists")
+        commands.append(tuple(command))
+    return tuple(commands)
 
-        domains = {}
-        for domain_name, domain_spec in domains_data.items():
-            if isinstance(domain_spec, dict):
-                domains[domain_name] = Domain(
-                    name=domain_name,
-                    description=domain_spec.get("description", ""),
-                    required_checks=domain_spec.get("required_checks", []),
-                )
-            else:
-                raise ValueError(f"Invalid domain specification for {domain_name}")
 
-        transitive_reqs = data.get("transitive_requirements", {})
-        if not isinstance(transitive_reqs, dict):
-            raise ValueError("transitive_requirements must be a dictionary")
-
-        return cls(
-            version=version,
-            domains=domains,
-            transitive_requirements=transitive_reqs,
+def load_config(path: Path | str = ".validation-fabric.yml") -> FabricConfig:
+    manifest = Path(path)
+    if not manifest.is_file():
+        raise ConfigError(f"configuration not found: {manifest}")
+    raw = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ConfigError("configuration root must be a mapping")
+    if raw.get("schemaVersion") != 1:
+        raise ConfigError("schemaVersion must be 1")
+    default_branch = raw.get("defaultBranch", "main")
+    if not isinstance(default_branch, str) or not default_branch:
+        raise ConfigError("defaultBranch must be a non-empty string")
+    raw_domains = raw.get("domains")
+    if not isinstance(raw_domains, list) or not raw_domains:
+        raise ConfigError("domains must contain at least one domain")
+    domains: dict[str, Domain] = {}
+    for index, item in enumerate(raw_domains):
+        prefix = f"domains[{index}]"
+        if not isinstance(item, dict):
+            raise ConfigError(f"{prefix} must be a mapping")
+        domain_id = item.get("id")
+        if not isinstance(domain_id, str) or not domain_id:
+            raise ConfigError(f"{prefix}.id must be a non-empty string")
+        if domain_id in domains:
+            raise ConfigError(f"duplicate domain id: {domain_id}")
+        cwd = item.get("cwd", ".")
+        runner = item.get("runner", "ubuntu-latest")
+        toolchain = item.get("toolchain", {})
+        if not isinstance(cwd, str) or Path(cwd).is_absolute() or ".." in Path(cwd).parts:
+            raise ConfigError(f"{prefix}.cwd must stay within the repository")
+        if not isinstance(runner, str) or not runner:
+            raise ConfigError(f"{prefix}.runner must be a non-empty string")
+        if not isinstance(toolchain, dict):
+            raise ConfigError(f"{prefix}.toolchain must be a mapping")
+        domains[domain_id] = Domain(
+            id=domain_id,
+            paths=_strings(item.get("paths"), f"{prefix}.paths"),
+            inputs=_strings(item.get("inputs"), f"{prefix}.inputs"),
+            commands=_commands(item.get("commands"), f"{prefix}.commands"),
+            requires=_strings(item.get("requires"), f"{prefix}.requires"),
+            cwd=cwd,
+            runner=runner,
+            toolchain=toolchain,
         )
+    fallback = _strings(raw.get("fallbackDomains"), "fallbackDomains")
+    unknown_ids = sorted(
+        {item for domain in domains.values() for item in domain.requires if item not in domains}
+        | {item for item in fallback if item not in domains}
+    )
+    if unknown_ids:
+        raise ConfigError(f"unknown domain references: {', '.join(unknown_ids)}")
+    _assert_acyclic(domains)
+    merge_raw = raw.get("merge", {})
+    if not isinstance(merge_raw, dict):
+        raise ConfigError("merge must be a mapping")
+    method = merge_raw.get("method", "squash")
+    if method not in {"merge", "squash", "rebase"}:
+        raise ConfigError("merge.method must be merge, squash, or rebase")
+    return FabricConfig(
+        schema_version=1,
+        default_branch=default_branch,
+        fallback_domains=fallback,
+        domains=domains,
+        merge=MergeConfig(
+            enabled=bool(merge_raw.get("enabled", False)),
+            method=method,
+            admission_check=str(merge_raw.get("admissionCheck", "Validation Fabric / admission")),
+            post_merge_workflows=_strings(merge_raw.get("postMergeWorkflows"), "merge.postMergeWorkflows"),
+        ),
+    )
 
-    def to_json(self) -> str:
-        """Serialize configuration to schema-versioned JSON."""
-        data = {
-            "schema_version": self.version,
-            "domains": {name: domain.to_dict() for name, domain in self.domains.items()},
-            "transitive_requirements": self.transitive_requirements,
-        }
-        return json.dumps(data, indent=2, sort_keys=True)
 
-    def fingerprint(self) -> str:
-        """Generate a deterministic SHA256 fingerprint of the configuration."""
-        json_str = self.to_json()
-        return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+def _assert_acyclic(domains: dict[str, Domain]) -> None:
+    visiting: set[str] = set()
+    visited: set[str] = set()
 
-    def select_domains(self, domain_names: list[str] | None = None) -> dict[str, Domain]:
-        """Select specific domains or all if none specified."""
-        if domain_names is None:
-            return self.domains
+    def visit(domain_id: str) -> None:
+        if domain_id in visiting:
+            raise ConfigError(f"domain dependency cycle includes: {domain_id}")
+        if domain_id in visited:
+            return
+        visiting.add(domain_id)
+        for requirement in domains[domain_id].requires:
+            visit(requirement)
+        visiting.remove(domain_id)
+        visited.add(domain_id)
 
-        selected = {}
-        for name in domain_names:
-            if name not in self.domains:
-                raise ValueError(f"Unknown domain: {name}")
-            selected[name] = self.domains[name]
-        return selected
-
-    def get_transitive_requirements(self, domain_name: str) -> list[str]:
-        """Get all transitive requirements for a domain."""
-        if domain_name not in self.transitive_requirements:
-            return []
-        return self.transitive_requirements[domain_name]
+    for domain_id in domains:
+        visit(domain_id)

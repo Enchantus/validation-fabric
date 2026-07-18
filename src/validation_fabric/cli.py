@@ -1,237 +1,174 @@
+"""The `vv` command-line interface."""
+
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
+from typing import Any
 
-from .config import Config
-from .core import RequirementResolver, ValidationResult
-from .certificates import Certificate, Evidence
+from .certificates import Evidence, admit
+from .config import ConfigError, load_config
+from .core import FabricError, build_plan, run_domain
+from .github import HttpGitHubApi
+from .merge import decide_merge, result_exit_code
 
 
-class CLI:
-    """Command-line interface for Validation Fabric."""
+def _write(value: Any) -> None:
+    print(json.dumps(value, indent=2, sort_keys=True))
 
-    def __init__(self, config_path: str = ".validation-fabric.yml"):
-        self.config_path = Path(config_path)
-        self.config: Config | None = None
 
-    def load_config(self) -> Config:
-        """Load configuration from file."""
-        if self.config is None:
-            try:
-                self.config = Config.from_yaml(self.config_path)
-            except FileNotFoundError:
-                print(f"Error: Configuration file not found: {self.config_path}")
-                sys.exit(1)
-            except Exception as e:
-                print(f"Error loading configuration: {e}")
-                sys.exit(1)
-        return self.config
-
-    def cmd_init(self) -> int:
-        """Initialize a new validation configuration."""
-        if self.config_path.exists():
-            print(f"Error: {self.config_path} already exists")
-            return 1
-
-        default_config = """version: "1.0"
-
+def _default_manifest(preset: str) -> str:
+    commands = {
+        "python": '["python", "-m", "pytest", "-q"]',
+        "node": '["npm", "test"]',
+        "go": '["go", "test", "./..."]',
+        "polyglot": '["python", "-m", "pytest", "-q"]',
+    }
+    paths = {"python": '["**/*.py"]', "node": '["**/*.js", "**/*.ts"]', "go": '["**/*.go"]', "polyglot": '["**/*"]'}
+    return f"""schemaVersion: 1
+defaultBranch: main
+fallbackDomains: [validation]
 domains:
-  default:
-    description: "Default validation domain"
-    required_checks:
-      - "lint"
-      - "test"
-
-transitive_requirements:
-  default: []
+  - id: validation
+    paths: {paths[preset]}
+    inputs: [".validation-fabric.yml"]
+    commands:
+      - {commands[preset]}
+    runner: ubuntu-latest
+merge:
+  enabled: false
+  method: squash
 """
-        self.config_path.write_text(default_config, encoding="utf-8")
-        print(f"Initialized {self.config_path}")
-        return 0
 
-    def cmd_doctor(self) -> int:
-        """Check configuration health and validity."""
-        config = self.load_config()
 
-        print("Configuration Health Check")
-        print(f"Version: {config.version}")
-        print(f"Domains: {len(config.domains)}")
-        for domain_name in sorted(config.domains.keys()):
-            domain = config.domains[domain_name]
-            print(f"  - {domain_name}: {len(domain.required_checks)} checks")
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(prog="vv", description="Risk-aware exact-candidate validation")
+    result.add_argument("--repo-root", default=".")
+    result.add_argument("--config", default=".validation-fabric.yml")
+    sub = result.add_subparsers(dest="command", required=True)
+    init = sub.add_parser("init")
+    init.add_argument("--preset", choices=("python", "node", "go", "polyglot"), default="python")
+    sub.add_parser("doctor")
+    for name in ("plan", "run", "status", "admit"):
+        command = sub.add_parser(name)
+        command.add_argument("--base", default="origin/main")
+        command.add_argument("--head", default="HEAD")
+        if name == "run":
+            command.add_argument("--domain", action="append")
+        if name == "admit":
+            command.add_argument("--evidence-dir", required=True)
+            command.add_argument("--repository", required=True)
+            command.add_argument("--run-id", required=True, type=int)
+            command.add_argument("--key-env", default="VALIDATION_FABRIC_CERTIFICATE_KEY")
+    explain = sub.add_parser("explain")
+    explain.add_argument("domain")
+    merge = sub.add_parser("merge")
+    merge.add_argument("--repository", required=True)
+    merge.add_argument("--pull-request", required=True, type=int)
+    merge.add_argument("--admitted-head", required=True)
+    merge.add_argument("--token-env", default="GITHUB_TOKEN")
+    return result
 
-        print(f"\nConfiguration fingerprint: {config.fingerprint()}")
-        return 0
 
-    def cmd_plan(self, domain: str | None = None) -> int:
-        """Show execution plan for a domain."""
-        config = self.load_config()
-        resolver = RequirementResolver(config)
-
-        domains_to_plan = [domain] if domain else list(config.domains.keys())
-
-        for domain_name in domains_to_plan:
-            try:
-                plan = resolver.create_plan(domain_name)
-                print(json.dumps(plan.to_dict(), indent=2, sort_keys=True))
-            except ValueError as e:
-                print(f"Error: {e}")
-                return 1
-
-        return 0
-
-    def cmd_run(self, domain: str | None = None) -> int:
-        """Run validation checks for a domain."""
-        config = self.load_config()
-
-        domains_to_run = [domain] if domain else list(config.domains.keys())
-
-        for domain_name in domains_to_run:
-            if domain_name not in config.domains:
-                print(f"Error: Unknown domain: {domain_name}")
-                return 1
-
-            domain_cfg = config.domains[domain_name]
-            cert = Certificate(
-                domain=domain_name,
-                admitted=True,
-                config_fingerprint=config.fingerprint(),
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
+    root = Path(args.repo_root).resolve()
+    manifest = root / args.config
+    try:
+        if args.command == "init":
+            if manifest.exists():
+                raise ConfigError(f"configuration already exists: {manifest}")
+            manifest.write_text(_default_manifest(args.preset), encoding="utf-8")
+            _write({"schemaVersion": 1, "created": str(manifest), "preset": args.preset})
+            return 0
+        config = load_config(manifest)
+        if args.command == "doctor":
+            _write(
+                {
+                    "schemaVersion": 1,
+                    "ok": True,
+                    "defaultBranch": config.default_branch,
+                    "domains": sorted(config.domains),
+                    "mergeEnabled": config.merge.enabled,
+                }
             )
-
-            for check in domain_cfg.required_checks:
-                result = ValidationResult(
-                    check_name=check,
-                    domain=domain_name,
-                    passed=True,
-                    details=f"Check '{check}' passed",
+            return 0
+        if args.command == "explain":
+            if args.domain not in config.domains:
+                raise ConfigError(f"unknown domain: {args.domain}")
+            domain = config.domains[args.domain]
+            _write(
+                {
+                    "schemaVersion": 1,
+                    "domain": domain.id,
+                    "paths": domain.paths,
+                    "inputs": domain.inputs,
+                    "commands": domain.commands,
+                    "requires": domain.requires,
+                    "cwd": domain.cwd,
+                    "runner": domain.runner,
+                    "toolchain": domain.toolchain,
+                }
+            )
+            return 0
+        if args.command == "merge":
+            token = os.environ.get(args.token_env, "")
+            if not token:
+                raise ValueError(f"token environment variable is empty: {args.token_env}")
+            result = decide_merge(
+                HttpGitHubApi(args.repository, token),
+                config,
+                args.pull_request,
+                args.admitted_head,
+            )
+            _write(result)
+            return result_exit_code(result)
+        plan = build_plan(root, config, args.base, args.head)
+        plan_dict = plan.to_dict()
+        if args.command in {"plan", "status"}:
+            _write(plan_dict)
+            return 0
+        if plan.state == "superseded":
+            _write(plan_dict)
+            return 0
+        if args.command == "run":
+            selected = set(args.domain or [record.domain for record in plan.domains])
+            unknown = sorted(selected - config.domains.keys())
+            if unknown:
+                raise ConfigError(f"unknown domains: {', '.join(unknown)}")
+            failed = False
+            for record in plan.domains:
+                if record.domain not in selected:
+                    continue
+                code, commands = run_domain(root, config.domains[record.domain], plan.changed)
+                domain_evidence = Evidence(
+                    1,
+                    os.environ.get("GITHUB_REPOSITORY", "local"),
+                    int(os.environ.get("GITHUB_RUN_ID", "0")),
+                    plan.base,
+                    plan.head,
+                    record.domain,
+                    record.fingerprint,
+                    "pass" if code == 0 else "fail",
+                    tuple(commands),
                 )
-                evidence = Evidence.from_result(result)
-                cert.add_evidence(evidence)
-
-            print(cert.to_json())
-
-        return 0
-
-    def cmd_status(self, domain: str | None = None) -> int:
-        """Report current validation status."""
-        config = self.load_config()
-
-        domains = [domain] if domain else list(config.domains.keys())
-        status = {
-            "config_fingerprint": config.fingerprint(),
-            "domains": {},
-        }
-
-        for domain_name in domains:
-            if domain_name not in config.domains:
-                print(f"Error: Unknown domain: {domain_name}")
-                return 1
-
-            domain_cfg = config.domains[domain_name]
-            status["domains"][domain_name] = {
-                "description": domain_cfg.description,
-                "required_checks": domain_cfg.required_checks,
-                "check_count": len(domain_cfg.required_checks),
-            }
-
-        print(json.dumps(status, indent=2, sort_keys=True))
-        return 0
-
-    def cmd_explain(self, domain: str) -> int:
-        """Explain a domain's requirements and checks."""
-        config = self.load_config()
-
-        if domain not in config.domains:
-            print(f"Error: Unknown domain: {domain}")
-            return 1
-
-        domain_cfg = config.domains[domain]
-        resolver = RequirementResolver(config)
-
-        explanation = {
-            "domain": domain,
-            "description": domain_cfg.description,
-            "direct_checks": domain_cfg.required_checks,
-            "transitive_requirements": resolver.resolve_all_requirements(domain),
-        }
-
-        print(json.dumps(explanation, indent=2, sort_keys=True))
-        return 0
-
-    def cmd_admit(self, domain: str) -> int:
-        """Issue an admission certificate for a domain."""
-        config = self.load_config()
-
-        if domain not in config.domains:
-            print(f"Error: Unknown domain: {domain}")
-            return 1
-
-        cert = Certificate(
-            domain=domain,
-            admitted=True,
-            config_fingerprint=config.fingerprint(),
-        )
-        print(cert.to_json())
-        return 0
+                _write(domain_evidence.to_dict())
+                failed |= code != 0
+            return 1 if failed else 0
+        evidence_items = [
+            json.loads(path.read_text(encoding="utf-8")) for path in sorted(Path(args.evidence_dir).glob("*.json"))
+        ]
+        key = os.environ.get(args.key_env, "")
+        envelope = admit(plan_dict, evidence_items, args.repository, args.run_id, key)
+        _write(envelope)
+        return 0 if envelope["certificate"]["admitted"] else 1
+    except (ConfigError, FabricError, ValueError, OSError, json.JSONDecodeError) as error:
+        _write({"schemaVersion": 1, "ok": False, "error": str(error)})
+        return 2
 
 
-def main() -> int:
-    """Run the Validation Fabric command-line interface."""
-    parser = argparse.ArgumentParser(
-        description="Risk-aware validation and exact-candidate admission"
-    )
-    parser.add_argument(
-        "-c",
-        "--config",
-        default=".validation-fabric.yml",
-        help="Path to configuration file (default: .validation-fabric.yml)",
-    )
-
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    subparsers.add_parser("init", help="Initialize a new validation configuration")
-    subparsers.add_parser("doctor", help="Check configuration health and validity")
-
-    plan_parser = subparsers.add_parser("plan", help="Show execution plan for a domain")
-    plan_parser.add_argument("domain", nargs="?", help="Domain name (optional)")
-
-    run_parser = subparsers.add_parser("run", help="Run validation checks")
-    run_parser.add_argument("domain", nargs="?", help="Domain name (optional)")
-
-    status_parser = subparsers.add_parser("status", help="Report validation status")
-    status_parser.add_argument("domain", nargs="?", help="Domain name (optional)")
-
-    explain_parser = subparsers.add_parser("explain", help="Explain domain requirements")
-    explain_parser.add_argument("domain", help="Domain name (required)")
-
-    admit_parser = subparsers.add_parser("admit", help="Issue an admission certificate")
-    admit_parser.add_argument("domain", help="Domain name (required)")
-
-    args = parser.parse_args()
-
-    if not args.command:
-        parser.print_help()
-        return 0
-
-    cli = CLI(config_path=args.config)
-
-    if args.command == "init":
-        return cli.cmd_init()
-    elif args.command == "doctor":
-        return cli.cmd_doctor()
-    elif args.command == "plan":
-        return cli.cmd_plan(args.domain)
-    elif args.command == "run":
-        return cli.cmd_run(args.domain)
-    elif args.command == "status":
-        return cli.cmd_status(args.domain)
-    elif args.command == "explain":
-        return cli.cmd_explain(args.domain)
-    elif args.command == "admit":
-        return cli.cmd_admit(args.domain)
-    else:
-        parser.print_help()
-        return 1
+if __name__ == "__main__":
+    sys.exit(main())
