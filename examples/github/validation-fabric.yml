@@ -11,5 +11,6 @@ jobs:
   validate:
     uses: Enchantus/validation-fabric/.github/workflows/validate.yml@v1
     with:
+      tooling-ref: v1
       base: ${{ github.event.pull_request.base.sha }}
       head: ${{ github.event.pull_request.head.sha }}

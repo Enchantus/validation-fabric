@@ -16,6 +16,7 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
     uses: Enchantus/validation-fabric/.github/workflows/admit.yml@v1
     with:
+      tooling-ref: v1
       source-run-id: ${{ github.event.workflow_run.id }}
       base: ${{ github.event.workflow_run.pull_requests[0].base.sha }}
       head: ${{ github.event.workflow_run.head_sha }}
