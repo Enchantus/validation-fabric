@@ -18,3 +18,10 @@ def test_action_supports_declared_consumer_toolchains() -> None:
     text = ACTION.read_text(encoding="utf-8")
     for toolchain in ("python", "uv", "node", "go"):
         assert f"fromJSON(inputs.toolchain).{toolchain}" in text
+
+
+def test_release_always_attests_github_artifacts_and_gates_pypi() -> None:
+    text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+    assert "actions/attest-build-provenance@v4" in text
+    assert 'gh release create "$GITHUB_REF_NAME"' in text
+    assert "if: vars.PYPI_PUBLISH_ENABLED == 'true'" in text
