@@ -1,0 +1,24 @@
+name: Validation Fabric Admission
+
+on:
+  workflow_run:
+    workflows: [Validation Fabric]
+    types: [completed]
+
+permissions:
+  actions: read
+  checks: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  admit:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    uses: Enchantus/validation-fabric/.github/workflows/admit.yml@v1
+    with:
+      source-run-id: ${{ github.event.workflow_run.id }}
+      base: ${{ github.event.workflow_run.pull_requests[0].base.sha }}
+      head: ${{ github.event.workflow_run.head_sha }}
+      pull-request: ${{ github.event.workflow_run.pull_requests[0].number }}
+    secrets:
+      certificate-key: ${{ secrets.VALIDATION_FABRIC_CERTIFICATE_KEY }}

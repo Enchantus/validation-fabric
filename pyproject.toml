@@ -21,15 +21,15 @@ classifiers = [
 ]
 dependencies = ["PyYAML>=6.0.2"]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "pytest-cov>=6", "ruff>=0.12", "mypy>=1.17", "types-PyYAML>=6.0", "build>=1.2"]
+
 [project.scripts]
 vv = "validation_fabric.cli:main"
 
 [project.urls]
 Repository = "https://github.com/Enchantus/validation-fabric"
 Issues = "https://github.com/Enchantus/validation-fabric/issues"
-
-[dependency-groups]
-dev = ["pytest>=8.3", "pytest-cov>=6", "ruff>=0.12", "mypy>=1.17", "build>=1.2"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/validation_fabric"]
@@ -40,3 +40,6 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

@@ -1,0 +1,10 @@
+schemaVersion: 1
+defaultBranch: main
+fallbackDomains: [go]
+domains:
+  - id: go
+    paths: ["**/*.go", "go.mod", "go.sum"]
+    inputs: ["go.mod", "go.sum", "**/*.go"]
+    commands: [["go", "test", "./..."]]
+    toolchain: {go: "1.24"}
+merge: {enabled: false}

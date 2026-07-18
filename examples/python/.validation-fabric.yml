@@ -1,0 +1,10 @@
+schemaVersion: 1
+defaultBranch: main
+fallbackDomains: [python]
+domains:
+  - id: python
+    paths: ["**/*.py", "pyproject.toml"]
+    inputs: ["pyproject.toml", "src/**", "tests/**"]
+    commands: [["python", "-m", "pytest", "-q"]]
+    toolchain: {python: "3.11"}
+merge: {enabled: false}

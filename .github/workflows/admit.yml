@@ -1,0 +1,83 @@
+name: Validation Fabric reusable privileged admission
+
+on:
+  workflow_call:
+    inputs:
+      source-run-id:
+        required: true
+        type: string
+      base:
+        required: true
+        type: string
+      head:
+        required: true
+        type: string
+      pull-request:
+        required: true
+        type: string
+      source-workflow:
+        required: false
+        default: Validation Fabric
+        type: string
+    secrets:
+      certificate-key:
+        required: true
+
+permissions:
+  actions: read
+  checks: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  admission:
+    name: Validation Fabric / admission
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head }}
+          fetch-depth: 0
+      - shell: bash
+        run: git fetch --no-tags origin "${{ inputs.base }}" "${{ inputs.head }}"
+      - uses: Enchantus/validation-fabric@v1
+      - name: Re-read and verify the originating run and current pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p .validation-fabric
+          gh api "repos/${{ github.repository }}/actions/runs/${{ inputs.source-run-id }}" > .validation-fabric/source-run.json
+          jq -e --arg workflow "${{ inputs.source-workflow }}" --arg head "${{ inputs.head }}" --argjson pr "${{ inputs.pull-request }}" '
+            .name == $workflow and .event == "pull_request" and .conclusion == "success" and
+            .head_sha == $head and (.pull_requests | length) == 1 and .pull_requests[0].number == $pr
+          ' .validation-fabric/source-run.json
+          gh api "repos/${{ github.repository }}/pulls/${{ inputs.pull-request }}" > .validation-fabric/pull.json
+          jq -e --arg base "${{ inputs.base }}" --arg head "${{ inputs.head }}" \
+            '.state == "open" and .base.sha == $base and .head.sha == $head' .validation-fabric/pull.json
+      - uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ inputs.source-run-id }}
+          pattern: validation-fabric-*
+          path: .validation-fabric/download
+          merge-multiple: true
+          github-token: ${{ github.token }}
+      - name: Recompute the exact plan from trusted workflow code
+        shell: bash
+        run: vv plan --base "${{ inputs.base }}" --head "${{ inputs.head }}" > .validation-fabric/plan.json
+      - name: Verify evidence and issue the admission certificate
+        env:
+          VALIDATION_FABRIC_CERTIFICATE_KEY: ${{ secrets.certificate-key }}
+        shell: bash
+        run: |
+          mkdir -p .validation-fabric/evidence
+          find .validation-fabric/download -name '*.json' ! -name '*plan*' -exec cp {} .validation-fabric/evidence/ \;
+          vv admit --base "${{ inputs.base }}" --head "${{ inputs.head }}" \
+            --evidence-dir .validation-fabric/evidence \
+            --repository "${{ github.repository }}" \
+            --run-id "${{ inputs.source-run-id }}" > .validation-fabric/certificate.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: validation-fabric-admission-${{ inputs.head }}
+          path: .validation-fabric/certificate.json
+          retention-days: 30

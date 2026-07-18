@@ -1,0 +1,10 @@
+schemaVersion: 1
+defaultBranch: main
+fallbackDomains: [node]
+domains:
+  - id: node
+    paths: ["**/*.js", "**/*.ts", "package.json", "package-lock.json"]
+    inputs: ["package.json", "package-lock.json", "src/**", "test/**"]
+    commands: [["npm", "ci"], ["npm", "test"]]
+    toolchain: {node: "22"}
+merge: {enabled: false}
