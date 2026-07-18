@@ -25,17 +25,21 @@ jobs:
           SOURCE_DATE_EPOCH: "315532800"
         shell: bash
         run: |
-          python -m build --outdir dist
-          python -m build --outdir dist-rebuild
-          for archive in dist/*.tar.gz dist-rebuild/*.tar.gz; do
+          one="$RUNNER_TEMP/validation-fabric-dist-one"
+          two="$RUNNER_TEMP/validation-fabric-dist-two"
+          python -m build --outdir "$one"
+          python -m build --outdir "$two"
+          for archive in "$one"/*.tar.gz "$two"/*.tar.gz; do
             gzip -cd "$archive" > "$archive.tar"
             gzip -n -9 -c "$archive.tar" > "$archive.normalized"
             mv "$archive.normalized" "$archive"
             rm "$archive.tar"
           done
-          for artifact in dist/*; do
-            cmp "$artifact" "dist-rebuild/$(basename "$artifact")"
+          for artifact in "$one"/*; do
+            cmp "$artifact" "$two/$(basename "$artifact")"
           done
+          mkdir dist
+          cp "$one"/* dist/
       - name: Smoke-test the clean wheel
         shell: bash
         run: |

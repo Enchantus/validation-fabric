@@ -71,22 +71,24 @@ jobs:
           SOURCE_DATE_EPOCH: "315532800"
         shell: bash
         run: |
-          python -m build --outdir dist-one
-          python -m build --outdir dist-two
-          for archive in dist-one/*.tar.gz dist-two/*.tar.gz; do
+          one="$RUNNER_TEMP/validation-fabric-dist-one"
+          two="$RUNNER_TEMP/validation-fabric-dist-two"
+          python -m build --outdir "$one"
+          python -m build --outdir "$two"
+          for archive in "$one"/*.tar.gz "$two"/*.tar.gz; do
             gzip -cd "$archive" > "$archive.tar"
             gzip -n -9 -c "$archive.tar" > "$archive.normalized"
             mv "$archive.normalized" "$archive"
             rm "$archive.tar"
           done
-          for artifact in dist-one/*; do
-            cmp "$artifact" "dist-two/$(basename "$artifact")"
+          for artifact in "$one"/*; do
+            cmp "$artifact" "$two/$(basename "$artifact")"
           done
       - name: Prove clean wheel installation and quick start
         shell: bash
         run: |
           python -m venv "$RUNNER_TEMP/validation-fabric-smoke"
-          "$RUNNER_TEMP/validation-fabric-smoke/bin/pip" install dist-one/*.whl
+          "$RUNNER_TEMP/validation-fabric-smoke/bin/pip" install "$RUNNER_TEMP"/validation-fabric-dist-one/*.whl
           "$RUNNER_TEMP/validation-fabric-smoke/bin/vv" --version
           mkdir "$RUNNER_TEMP/validation-fabric-consumer"
           cd "$RUNNER_TEMP/validation-fabric-consumer"
