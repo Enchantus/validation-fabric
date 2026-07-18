@@ -15,22 +15,24 @@ def identity():
         "o/r",
         7,
         "Validation Fabric",
-        "pull_request",
+        "pull_request_target",
         "success",
         "base",
         "head",
         12,
         ".github/workflows/validation-fabric.yml",
         "fork/r",
+        "Validation Fabric PR #12 @ head",
     )
 
 
 def test_privileged_plane_rechecks_every_identity_field():
     run = {
         "name": "Validation Fabric",
-        "event": "pull_request",
+        "event": "pull_request_target",
         "conclusion": "success",
-        "head_sha": "head",
+        "head_sha": "base",
+        "display_title": "Validation Fabric PR #12 @ head",
         "path": ".github/workflows/validation-fabric.yml",
         "repository": {"full_name": "o/r"},
         "head_repository": {"full_name": "fork/r"},
@@ -51,7 +53,8 @@ def test_moved_pr_head_is_rejected():
         "name": "Validation Fabric",
         "event": "pull_request",
         "conclusion": "success",
-        "head_sha": "head",
+        "head_sha": "base",
+        "display_title": "Validation Fabric PR #12 @ head",
         "path": ".github/workflows/validation-fabric.yml",
         "repository": {"full_name": "o/r"},
         "head_repository": {"full_name": "fork/r"},

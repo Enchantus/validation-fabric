@@ -37,6 +37,10 @@ on:
         required: false
         default: pull_request_target
         type: string
+      source-run-title:
+        description: Exact run title derived by the trusted caller from PR identity.
+        required: true
+        type: string
     secrets:
       certificate-key:
         required: true
@@ -80,12 +84,13 @@ jobs:
           mkdir -p .validation-fabric
           gh api "repos/${{ github.repository }}/actions/runs/${{ inputs.source-run-id }}" > .validation-fabric/source-run.json
           jq -e --arg workflow "${{ inputs.source-workflow }}" --arg workflow_path "${{ inputs.source-workflow-path }}" \
-            --arg source_event "${{ inputs.source-event }}" \
+            --arg source_event "${{ inputs.source-event }}" --arg run_title "${{ inputs.source-run-title }}" \
             --arg repo "${{ github.repository }}" --arg head_repo "${{ inputs.head-repository || github.repository }}" \
-            --arg head "${{ inputs.head }}" '
+            --arg base "${{ inputs.base }}" --arg head "${{ inputs.head }}" '
             .name == $workflow and .event == $source_event and .conclusion == "success" and
-            .path == $workflow_path and .repository.full_name == $repo and
-            .head_repository.full_name == $head_repo and .head_sha == $head
+            .display_title == $run_title and .path == $workflow_path and .repository.full_name == $repo and
+            (($source_event == "pull_request_target" and .head_sha == $base) or
+             ($source_event == "pull_request" and .head_sha == $head))
           ' .validation-fabric/source-run.json
           gh api "repos/${{ github.repository }}/pulls/${{ inputs.pull-request }}" > .validation-fabric/pull.json
           jq -e --arg base "${{ inputs.base }}" --arg head "${{ inputs.head }}" \

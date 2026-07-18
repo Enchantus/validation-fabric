@@ -16,20 +16,31 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       base: ${{ steps.pull.outputs.base }}
+      head: ${{ steps.pull.outputs.head }}
       head-repository: ${{ steps.pull.outputs.head-repository }}
       pull-request: ${{ steps.pull.outputs.pull-request }}
     steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          name: validation-fabric-plan
+          path: .validation-fabric/source
+          github-token: ${{ github.token }}
       - id: pull
         env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
-          candidates="$(gh api "repos/${{ github.repository }}/commits/$HEAD_SHA/pulls")"
-          pull="$(jq -c --arg head "$HEAD_SHA" '[.[] | select(.state == "open" and .head.sha == $head)]' <<<"$candidates")"
+          plan="$(cat .validation-fabric/source/validation-fabric-plan.json)"
+          base="$(jq -er '.base' <<<"$plan")"
+          head="$(jq -er '.head' <<<"$plan")"
+          candidates="$(gh api "repos/${{ github.repository }}/commits/$head/pulls")"
+          pull="$(jq -c --arg base "$base" --arg head "$head" \
+            '[.[] | select(.state == "open" and .base.sha == $base and .head.sha == $head)]' <<<"$candidates")"
           test "$(jq length <<<"$pull")" -eq 1
           {
-            echo "base=$(jq -r '.[0].base.sha' <<<"$pull")"
+            echo "base=$base"
+            echo "head=$head"
             echo "head-repository=$(jq -r '.[0].head.repo.full_name' <<<"$pull")"
             echo "pull-request=$(jq -r '.[0].number' <<<"$pull")"
           } >> "$GITHUB_OUTPUT"
@@ -41,10 +52,11 @@ jobs:
       tooling-ref: v1
       source-run-id: ${{ github.event.workflow_run.id }}
       base: ${{ needs.resolve.outputs.base }}
-      head: ${{ github.event.workflow_run.head_sha }}
+      head: ${{ needs.resolve.outputs.head }}
       head-repository: ${{ needs.resolve.outputs.head-repository }}
       pull-request: ${{ needs.resolve.outputs.pull-request }}
       source-workflow-path: .github/workflows/validation-fabric.yml
       source-event: pull_request_target
+      source-run-title: "${{ format('Validation Fabric PR #{0} @ {1}', needs.resolve.outputs.pull-request, needs.resolve.outputs.head) }}"
     secrets:
       certificate-key: ${{ secrets.VALIDATION_FABRIC_CERTIFICATE_KEY }}

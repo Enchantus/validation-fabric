@@ -63,6 +63,7 @@ class RunIdentity:
     pull_request: int
     workflow_path: str = ""
     head_repository: str = ""
+    run_title: str = ""
 
 
 def verify_run_identity(api: GitHubApi, expected: RunIdentity) -> dict[str, Any]:
@@ -77,8 +78,11 @@ def verify_run_identity(api: GitHubApi, expected: RunIdentity) -> dict[str, Any]
         failures.append("event-mismatch")
     if run.get("conclusion") != expected.conclusion:
         failures.append("conclusion-mismatch")
-    if run.get("head_sha") != expected.head:
+    expected_run_sha = expected.base if expected.event == "pull_request_target" else expected.head
+    if run.get("head_sha") != expected_run_sha:
         failures.append("head-mismatch")
+    if expected.run_title and run.get("display_title") != expected.run_title:
+        failures.append("run-title-mismatch")
     if expected.workflow_path and run.get("path") != expected.workflow_path:
         failures.append("workflow-path-mismatch")
     if expected.head_repository and run.get("head_repository", {}).get("full_name") != expected.head_repository:

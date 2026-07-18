@@ -3,7 +3,7 @@
 Validation Fabric has two planes.
 
 1. The pull-request plane is entered through a `pull_request_target` caller committed to the protected default branch. It checks out candidate code, loads validation policy from the exact trusted base commit, removes checkout credentials, executes those commands, and uploads unsigned evidence. It receives read-only repository permissions and no privileged secret. Fork heads are checked out from their source repository while the base manifest and base commit are fetched from the consumer repository.
-2. The admission plane is invoked by a caller committed to the protected default branch. It re-reads the originating workflow run, checks repository, workflow name and path, run, base, head repository, head SHA, and PR identity, recomputes the exact plan from the same base manifest, validates every evidence fingerprint, rejects duplicate or unexpected evidence, and only then signs admission.
+2. The admission plane is invoked by a caller committed to the protected default branch. The source caller uses a deterministic run title containing the PR number and candidate SHA. The admission caller downloads the source plan to resolve the exact open PR, then re-reads the originating workflow run and checks repository, workflow name and path, event, run title, trusted base workflow SHA, head repository, candidate SHA, and PR identity. It recomputes the plan from the same base manifest, validates every evidence fingerprint, rejects duplicate or unexpected evidence, and only then signs admission.
 
 Evidence is not authority. A signature is valid only for its exact certificate payload. A successful domain job alone is insufficient for admission.
 

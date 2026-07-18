@@ -22,6 +22,10 @@ def test_validation_and_admission_use_the_trusted_base_manifest() -> None:
         assert '--config "$RUNNER_TEMP/validation-fabric-base.yml"' in text
         assert "head-repository:" in text
         assert "repository: ${{ inputs.head-repository || github.repository }}" in text
+    admission = (WORKFLOWS / "admit.yml").read_text(encoding="utf-8")
+    assert "source-run-title:" in admission
+    assert 'default: pull_request_target' in admission
+    assert '.display_title == $run_title' in admission
 
 
 def test_merge_requires_certificate_and_admission_run() -> None:
@@ -62,5 +66,6 @@ def test_recommended_caller_is_default_branch_owned_and_read_only() -> None:
     text = ACTION.parent / "examples" / "github" / "validation-fabric.yml"
     source = text.read_text(encoding="utf-8")
     assert "pull_request_target:" in source
+    assert "run-name: Validation Fabric PR #" in source
     assert "contents: read" in source
     assert "head-repository: ${{ github.event.pull_request.head.repo.full_name }}" in source
