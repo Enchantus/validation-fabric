@@ -4,7 +4,7 @@ Validation Fabric selects validation by changed-path risk, fingerprints the exac
 
 It ships as the `validation-fabric` Python package, the `vv` CLI, a GitHub Action, and reusable GitHub workflows. Exact-candidate merging is available but disabled by default.
 
-> Status: `0.1.0a1` bootstrap. The API is intentionally prerelease until fixture adoption and SessionBuddie shadow parity are complete.
+> Status: `0.2.0a1` prerelease. The API remains prerelease until privileged adoption, sustained shadow parity, and the v1 promotion audit are complete.
 
 ## Quick start
 

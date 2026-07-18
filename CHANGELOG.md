@@ -4,6 +4,23 @@ This project follows Semantic Versioning and Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.2.0a1] - 2026-07-18
+
+### Added
+
+- Atomic, idempotent lifecycle event ledger and deterministic candidate status reduction.
+- Fork-aware fixture coverage for alternate branches, renamed and deleted paths, empty ranges, and unknown files.
+
+### Security
+
+- Load validation and admission policy from the exact trusted base commit.
+- Bind run identity to repository, workflow path, event, head repository, PR, base, and head.
+- Require a signed PR-bound certificate and exact successful admission check before optional merging.
+- Remove checkout credentials before candidate commands and pin every external Action to an immutable commit.
+- Reject duplicate, malformed, unexpected, mismatched, missing, and stale evidence.
+
+## [0.1.0a1] - 2026-07-18
+
 ### Added
 
 - Generic package, `vv` CLI, consumer manifest, risk planning, evidence, and certificate APIs.
