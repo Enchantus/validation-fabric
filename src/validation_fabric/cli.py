@@ -15,6 +15,7 @@ from .config import ConfigError, load_config
 from .core import FabricError, build_plan, run_domain
 from .events import Event, EventError, append_event, reduce_status
 from .github import HttpGitHubApi
+from .impact import build_impact_contract
 from .merge import decide_merge, result_exit_code
 
 
@@ -106,10 +107,13 @@ def parser() -> argparse.ArgumentParser:
     init = sub.add_parser("init")
     init.add_argument("--preset", choices=("python", "node", "go", "polyglot"), default="python")
     sub.add_parser("doctor")
-    for name in ("plan", "run", "status", "admit"):
+    for name in ("plan", "impact", "run", "status", "admit"):
         command = sub.add_parser(name)
         command.add_argument("--base", default="origin/main")
         command.add_argument("--head", default="HEAD")
+        if name == "impact":
+            command.add_argument("--evidence-dir")
+            command.add_argument("--checkpoint", action="append", default=[])
         if name == "run":
             command.add_argument("--domain", action="append")
         if name == "admit":
@@ -234,6 +238,10 @@ def main(argv: list[str] | None = None) -> int:
             return result_exit_code(result)
         plan = build_plan(root, config, args.base, args.head)
         plan_dict = plan.to_dict()
+        if args.command == "impact":
+            evidence_dir = Path(args.evidence_dir).resolve() if args.evidence_dir else None
+            _write(build_impact_contract(plan, config, evidence_dir, tuple(args.checkpoint)).to_dict())
+            return 0
         if args.command in {"plan", "status"}:
             _write(plan_dict)
             return 0
